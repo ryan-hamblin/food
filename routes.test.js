@@ -6,42 +6,88 @@ chai.use(chaiHTTP);
 mongoose.connect('mongodb://localhost/food-test', { useMongoClient: true });
 
 const server = require('./server');
-// require your models
+const Food = require('./food');
 
 describe(`food api`, () => {
-  // beforeEach(() => {
-  //   const newFood = new Food('Spaghetti');
-  //   newFood.save();
-  // })
-  // afterEach(() => {
-  //   deleting data in your test db.
-  //   Food.remove({}, (err) => {
-  //   done();
-  // });
-  // })
-
-  describe(`[GET] '/food'`, () => {});
-  it('should return an string hello world', done => {
-    chai
-      .request(server)
-      .get('/food')
-      .end((err, res) => {
-        expect(res.status).to.equal(200);
-        expect(res.body.text).to.be.a('string');
-        expect(res.body.text).to.equal('hello world');
+  let foodId = '';
+  beforeEach(done => {
+    const newFood = new Food({ title: 'Spaghetti' });
+    newFood.save((err, savedFood) => {
+      if (err) {
         done();
-      });
+      }
+      foodId = savedFood._id;
+      done();
+    });
   });
 
-  describe(`[GET] '/monsters'`, () => {
-    it('should return an array of monsters', done => {
+  afterEach(done => {
+    Food.remove({}, err => {
+      if (err) {
+        done();
+      }
+      done();
+    });
+  });
+
+  describe(`[POST] '/food'`, () => {
+    it('should add a food item to the food DB and handles an error with bad input data', done => {
+      const foodToSave = {
+        fda: 'Chicken Nuggets'
+      };
       chai
         .request(server)
-        .get('/monsters')
+        .post('/food')
+        .send(foodToSave)
         .end((err, res) => {
+          if (err) {
+            expect(err.response.body.err).to.equal(
+              'Food validation failed: title: Path `title` is required.'
+            );
+            expect(err.status).to.equal(422);
+            done();
+          }
+          expect(res.body).to.be.an('object');
+          expect(res.status).to.equal(200);
+          expect(res.body.title).to.equal(foodToSave.title);
+          expect(res.body).to.haveOwnProperty('_id');
+          done();
+        });
+    });
+  });
+
+  describe(`[GET] '/food'`, () => {
+    it('should return array of objects', done => {
+      chai
+        .request(server)
+        .get('/food')
+        .end((err, res) => {
+          if (err) {
+            expect(err.status).to.equal(500);
+            done();
+          }
           expect(res.status).to.equal(200);
           expect(Array.isArray(res.body)).to.equal(true);
+          expect(res.body.length).to.equal(1);
+          expect(res.body[0]).to.be.an('object');
+          expect(foodId.toString()).to.equal(res.body[0]._id);
           done();
+        });
+    });
+  });
+
+  describe(`[DELETE] '/food/:id'`, () => {
+    it('should delete an item from the DB', done => {
+      chai
+        .request(server)
+        .delete(`/food/${foodId}`)
+        .end((err, response) => {
+          if (err) {
+            expect(err.status).to.equal(422);
+            done();
+          }
+          expect(response.text).to.equal('success');
+          // do own delete to Food in here. Food.remove({foodId}, (err, removedObj) => {})
         });
     });
   });
